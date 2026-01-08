@@ -1,0 +1,464 @@
+repo: "<OWNER>/<REPO>"
+issues:
+  - title: "[Foundation] EP-001: Establish secure backend data store for EventPrompt"
+    labels:
+      - foundation
+    body: |
+      ## User Story
+      As a system owner,
+      I want all event, guest, and message data stored in a secure database,
+      So that the system can scale beyond Google Sheets and protect sensitive data.
+
+      ## Assumptions
+      Supabase (Postgres) is the chosen datastore
+
+      App is hosted separately (Next.js)
+
+      ## Acceptance Criteria
+      Supabase project exists
+
+      Environment variables for DB access are stored securely in GitHub Secrets
+
+      No production secrets exist in Google Apps Script
+
+      ## Out of Scope
+      Data migrations from legacy Sheets
+
+      Analytics or reporting views
+
+      ## Dependencies
+      None
+  - title: "[Foundation] EP-002: Define core data model for events, guests, and messages"
+    labels:
+      - foundation
+    body: |
+      ## User Story
+      As a system,
+      I need a normalized data model for events, guests, and scheduled messages,
+      So that reminders, dashboards, and locking logic can operate reliably.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Tables created:
+
+      events
+
+      guests
+
+      scheduled_messages
+
+      message_logs
+
+      Each table has:
+
+      Primary key
+
+      Created/updated timestamps
+
+      Foreign key relationships enforced
+
+      Status fields use constrained enums (not free text)
+
+      ## Out of Scope
+      Historical archiving
+
+      Soft deletes
+
+      ## Dependencies
+      EP-001
+  - title: "[Security] EP-003: Remove operational secrets from customer-accessible systems"
+    labels:
+      - security
+    body: |
+      ## User Story
+      As a system owner,
+      I want Twilio credentials and system secrets stored outside customer-accessible tools,
+      So that sharing data never exposes infrastructure access.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Twilio Account SID, Auth Token, and From Number stored only in environment variables
+
+      No secrets stored in:
+
+      Google Sheets
+
+      Apps Script properties
+
+      App can send SMS using env-based credentials
+
+      ## Out of Scope
+      Key rotation automation
+
+      ## Dependencies
+      EP-001
+  - title: "[Setup] EP-010: Create event setup API for draft events"
+    labels:
+      - setup
+    body: |
+      ## User Story
+      As an event owner,
+      I want to submit my event details through a single setup flow,
+      So that my event can be reviewed before being locked.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      API accepts event setup payload
+
+      Event is created in draft state
+
+      Event slug is auto-generated and unique
+
+      Event is not publicly accessible while in draft
+
+      ## Out of Scope
+      Editing after finalisation
+
+      Multiple drafts per event
+
+      ## Dependencies
+      EP-002
+  - title: "[Lock] EP-011: Implement review -> finalise -> lock workflow"
+    labels:
+      - lock
+    body: |
+      ## User Story
+      As a system,
+      I want events to be locked after finalisation,
+      So that configuration remains stable and predictable.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Finalisation sets locked_at timestamp
+
+      Any write attempt after lock is rejected by backend
+
+      Locked events cannot:
+
+      Change RSVP deadline
+
+      Change reminder rules
+
+      Change guest list structure
+
+      ## Out of Scope
+      Paid change handling
+
+      Admin override tooling
+
+      ## Dependencies
+      EP-010
+  - title: "[Lock] EP-012: Generate scheduled reminders upon event lock"
+    labels:
+      - lock
+    body: |
+      ## User Story
+      As a system,
+      I want RSVP reminder jobs generated automatically when an event is locked,
+      So that reminders are predictable and require no manual setup.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      On lock:
+
+      21-day reminder created
+
+      10-day reminder created
+
+      3-day reminder created
+
+      Reminders stored in scheduled_messages
+
+      Reminders include:
+
+      event_id
+
+      message_type
+
+      send_at timestamp
+
+      status = pending
+
+      ## Out of Scope
+      Custom reminder schedules
+
+      Reminder edits
+
+      ## Dependencies
+      EP-011
+  - title: "[RSVP] EP-020: Accept RSVP submissions from guests"
+    labels:
+      - rsvp
+    body: |
+      ## User Story
+      As a guest,
+      I want to submit my RSVP once,
+      So that my attendance is recorded correctly.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      RSVP endpoint accepts guest response
+
+      Guest status updated to Yes / No
+
+      Duplicate submissions are prevented
+
+      RSVP updates are idempotent
+
+      ## Out of Scope
+      RSVP edits
+
+      Meal preference changes after submission
+
+      ## Dependencies
+      EP-002
+  - title: "[RSVP] EP-021: Display RSVP confirmation to guests"
+    labels:
+      - rsvp
+    body: |
+      ## User Story
+      As a guest,
+      I want to see confirmation that my RSVP was received,
+      So that I know I do not need to respond again.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Confirmation message displayed after submission
+
+      Message reflects RSVP choice
+
+      No access to modify response
+
+      ## Out of Scope
+      Email confirmations
+
+      ## Dependencies
+      EP-020
+  - title: "[Dashboard] EP-030: Provide read-only RSVP dashboard for event owners"
+    labels:
+      - dashboard
+    body: |
+      ## User Story
+      As an event owner,
+      I want to see who has and hasn't replied,
+      So that I can track attendance without managing reminders.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Dashboard shows:
+
+      Guest name
+
+      RSVP status
+
+      Summary counts visible:
+
+      Total invited
+
+      Yes / No / Pending
+
+      Dashboard is read-only
+
+      ## Out of Scope
+      Editing guests
+
+      Triggering reminders
+
+      ## Dependencies
+      EP-020
+  - title: "[Dashboard] EP-031: Secure dashboard access per event"
+    labels:
+      - dashboard
+    body: |
+      ## User Story
+      As a system,
+      I want dashboard access scoped to a single event,
+      So that customer data is isolated.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Dashboard URL includes secure access token
+
+      Token only grants read-only access
+
+      Access cannot be used to modify data
+
+      ## Out of Scope
+      User accounts
+
+      Password-based login
+
+      ## Dependencies
+      EP-030
+  - title: "[SMS] EP-040: Create reminder execution API"
+    labels:
+      - sms
+    body: |
+      ## User Story
+      As a system,
+      I want a single API endpoint that processes pending reminders,
+      So that scheduling can be handled externally.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Endpoint:
+
+      Fetches pending reminders where send_at <= now
+
+      Sends SMS via Twilio
+
+      Updates reminder status
+
+      Errors are logged
+
+      ## Out of Scope
+      Retry UI
+
+      Rate-limit optimisation
+
+      ## Dependencies
+      EP-012
+  - title: "[SMS] EP-041: Prevent duplicate SMS sends"
+    labels:
+      - sms
+    body: |
+      ## User Story
+      As a system,
+      I want reminder sending to be idempotent,
+      So that retries never cause duplicate messages.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      Each reminder has unique idempotency key
+
+      Duplicate sends are rejected
+
+      Twilio Message SID stored
+
+      ## Out of Scope
+      SMS delivery guarantees
+
+      ## Dependencies
+      EP-040
+  - title: "[SMS] EP-042: Schedule reminder execution via GitHub Actions"
+    labels:
+      - sms
+    body: |
+      ## User Story
+      As a system owner,
+      I want reminders processed automatically on a schedule,
+      So that no manual intervention is required.
+
+      ## Assumptions
+      None
+
+      ## Acceptance Criteria
+      GitHub Actions cron runs on defined interval
+
+      Job calls reminder execution endpoint
+
+      Execution logs visible in GitHub Actions
+
+      ## Out of Scope
+      Real-time execution guarantees
+
+      ## Dependencies
+      EP-040
+  - title: "[Future] EP-100: Replace GitHub Actions scheduler with platform-native cron"
+    labels:
+      - future
+    body: |
+      ## User Story
+      Not provided (Type: Future; Reason: Reliability & scale)
+
+      ## Assumptions
+      Type: Future
+
+      Reason: Reliability & scale
+
+      ## Acceptance Criteria
+      Not applicable (future backlog item)
+
+      ## Out of Scope
+      Implementation in current scope
+
+      ## Dependencies
+      None
+  - title: "[Future] EP-101: Queue-based SMS dispatch"
+    labels:
+      - future
+    body: |
+      ## User Story
+      Not provided (Type: Future; Reason: High-volume protection)
+
+      ## Assumptions
+      Type: Future
+
+      Reason: High-volume protection
+
+      ## Acceptance Criteria
+      Not applicable (future backlog item)
+
+      ## Out of Scope
+      Implementation in current scope
+
+      ## Dependencies
+      None
+  - title: "[Future] EP-102: CSV export for event owners"
+    labels:
+      - future
+    body: |
+      ## User Story
+      Not provided (Type: Nice-to-have)
+
+      ## Assumptions
+      Type: Nice-to-have
+
+      ## Acceptance Criteria
+      Not applicable (future backlog item)
+
+      ## Out of Scope
+      Implementation in current scope
+
+      ## Dependencies
+      None
+  - title: "[Future] EP-103: Admin override tooling for paid changes"
+    labels:
+      - future
+    body: |
+      ## User Story
+      Not provided (Type: Future)
+
+      ## Assumptions
+      Type: Future
+
+      ## Acceptance Criteria
+      Not applicable (future backlog item)
+
+      ## Out of Scope
+      Implementation in current scope
+
+      ## Dependencies
+      None
