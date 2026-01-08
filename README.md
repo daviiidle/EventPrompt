@@ -27,4 +27,8 @@ Tailwind CSS is used for styling, and Next Themes is used for dark mode. React I
 - Update homepage composition in `app/page.tsx`
 - Add or modify section components in `components/marketing/`
 
+### Backend datastore
+
+- Supabase setup and secret handling: `docs/supabase.md`
+
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/talhatahir)
