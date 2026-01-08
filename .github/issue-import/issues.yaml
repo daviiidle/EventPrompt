@@ -1,4 +1,4 @@
-repo: "<OWNER>/<REPO>"
+repo: "daviidle/EventPrompt"
 issues:
   - title: "[Foundation] EP-001: Establish secure backend data store for EventPrompt"
     labels:
