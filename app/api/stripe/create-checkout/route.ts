@@ -166,14 +166,16 @@ export async function POST(req: NextRequest) {
       metadata: {
         eventId: eventData.id,
         tier,
-      guestLimit: tier === "premium" ? String(guestLimit) : "",
-    },
-  });
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to create Stripe Checkout session" },
-      { status: 502 }
-    );
+        guestLimit: tier === "premium" ? String(guestLimit) : "",
+      },
+    });
+  } catch (error) {
+    console.error("Stripe Checkout session error", error);
+    const message =
+      error instanceof Stripe.errors.StripeError
+        ? error.message
+        : "Failed to create Stripe Checkout session";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const { error: updateError } = await supabase
