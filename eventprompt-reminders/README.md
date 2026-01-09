@@ -22,6 +22,27 @@ npx wrangler dev
 npm run deploy
 ```
 
+## Cloudflare deploy steps (from this repo)
+
+1) Ensure `wrangler.toml` has the correct account:
+
+```toml
+account_id = "a2747d15b9ca06f56c6ef21388e22c3e"
+```
+
+2) Deploy with an API token (use one with Workers Scripts:Edit):
+
+```bash
+CLOUDFLARE_API_TOKEN=... npx wrangler deploy
+```
+
+3) Optional: add a custom route in the Cloudflare dashboard:
+   Workers & Pages → `eventprompt-reminders` → Triggers → Routes → add `eventprompt.site/*`
+
+4) Verify:
+   - `https://eventprompt-reminders.daviiidle.workers.dev/health`
+   - `https://eventprompt.site/health` (after route is added)
+
 ## Required secrets (Cloudflare dashboard)
 
 Set these Worker environment variables in the Cloudflare dashboard (do not commit them to git):
