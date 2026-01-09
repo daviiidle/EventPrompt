@@ -7,10 +7,61 @@ import Button from "components/ui/Button";
 import { marketingCopy } from "content/marketing";
 
 const Pricing = () => {
-  const [currency, setCurrency] = useState<"AUD" | "USD">("AUD");
-  const [capacity, setCapacity] = useState(100);
+  const [loadingTier, setLoadingTier] = useState<null | "standard" | "premium">(null);
+  const [premiumGuestLimit, setPremiumGuestLimit] = useState(50);
+  const [premiumGuestInput, setPremiumGuestInput] = useState("50");
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  const capacities = [50, 100, 150];
+  const premiumBasePrice = 179;
+  const premiumMinGuests = 50;
+  const premiumMaxGuests = 1000;
+  const premiumPerGuest = 0.4;
+
+  const parsedGuestLimit = Number(premiumGuestInput);
+  const isGuestInputValid =
+    Number.isFinite(parsedGuestLimit) &&
+    parsedGuestLimit >= premiumMinGuests &&
+    parsedGuestLimit <= premiumMaxGuests;
+
+  const premiumPrice =
+    premiumBasePrice +
+    Math.max(0, premiumGuestLimit - premiumMinGuests) * premiumPerGuest;
+
+  const startCheckout = async (tier: "standard" | "premium") => {
+    setCheckoutError(null);
+    setLoadingTier(tier);
+    try {
+      if (tier === "premium" && !isGuestInputValid) {
+        throw new Error("Guest limit out of range.");
+      }
+
+      const response = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          tier,
+          guestLimit: tier === "premium" ? premiumGuestLimit : undefined,
+        }),
+      });
+
+      const payload = (await response.json()) as { url?: string; error?: string };
+
+      if (!response.ok || !payload.url) {
+        if (response.status === 401) {
+          throw new Error("Please sign in before starting checkout.");
+        }
+        throw new Error(payload.error ?? "Unable to start checkout.");
+      }
+
+      window.location.assign(payload.url);
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "We couldn’t start checkout. Please try again.";
+      setCheckoutError(message);
+      setLoadingTier(null);
+    }
+  };
 
   return (
     <section id="pricing" className="py-20 sm:py-24">
@@ -19,46 +70,51 @@ const Pricing = () => {
           <h2 className="text-3xl font-semibold text-gray-900 dark:text-white sm:text-4xl">
             {marketingCopy.pricing.heading}
           </h2>
-          <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">Choose a plan and set your guest count.</p>
+          <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+            Choose the plan that fits your event.
+          </p>
         </div>
-        <div className="mb-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <div className="inline-flex rounded-full border border-white/70 bg-white/70 p-1 text-sm shadow-sm backdrop-blur dark:border-gray-800 dark:bg-gray-900/70">
-            {(["AUD", "USD"] as const).map((label) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setCurrency(label)}
-                className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
-                  currency === label
-                    ? "bg-black text-white dark:bg-white dark:text-black"
-                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="inline-flex rounded-full border border-white/70 bg-white/70 p-1 text-sm shadow-sm backdrop-blur dark:border-gray-800 dark:bg-gray-900/70">
-            {capacities.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setCapacity(value)}
-                className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
-                  capacity === value
-                    ? "bg-black text-white dark:bg-white dark:text-black"
-                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
+        <div className="mb-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Premium guest limit
+          </span>
+          <input
+            type="number"
+            min={premiumMinGuests}
+            max={premiumMaxGuests}
+            step={1}
+            inputMode="numeric"
+            className="w-36 rounded-full border border-white/70 bg-white/80 px-4 py-2 text-center text-xs font-semibold text-gray-700 shadow-sm backdrop-blur dark:border-gray-800 dark:bg-gray-900/70 dark:text-gray-200"
+            value={premiumGuestInput}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setPremiumGuestInput(nextValue);
+              const nextNumber = Number(nextValue);
+              if (
+                Number.isFinite(nextNumber) &&
+                nextNumber >= premiumMinGuests &&
+                nextNumber <= premiumMaxGuests
+              ) {
+                setPremiumGuestLimit(nextNumber);
+              }
+            }}
+            onBlur={() => {
+              if (!isGuestInputValid) {
+                setPremiumGuestInput(String(premiumGuestLimit));
+              }
+            }}
+          />
+          <span className="text-xs text-gray-500 dark:text-gray-400">Guests (50–1000)</span>
         </div>
         <div className="grid gap-6 md:grid-cols-2">
           {marketingCopy.pricing.plans.map((plan) => {
-            const price = currency === "AUD" ? plan.aud : plan.usd;
-            const symbol = currency === "AUD" ? "A$" : "$";
+            const isLoading = loadingTier === plan.tier;
+            const price = plan.tier === "premium" ? premiumPrice : plan.aud;
+            const priceLabel = Number.isInteger(price) ? price.toFixed(0) : price.toFixed(2);
+            const guestLimitLine =
+              plan.tier === "premium"
+                ? `Includes SMS reminders for up to ${premiumGuestLimit} guests`
+                : "Flat price — no guest-based SMS limits";
 
             return (
               <div
@@ -68,10 +124,9 @@ const Pricing = () => {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{plan.name}</h3>
                   <p className="mt-2 text-4xl font-semibold text-gray-900 dark:text-white">
-                    {symbol}
-                    {price}
+                    A${priceLabel}
                   </p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Includes up to {capacity} guests</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{guestLimitLine}</p>
                   <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{plan.description}</p>
                   <ul className="mt-5 space-y-3 text-sm text-gray-700 dark:text-gray-200">
                     {plan.features.map((feature) => (
@@ -82,13 +137,21 @@ const Pricing = () => {
                     ))}
                   </ul>
                 </div>
-                <Button className="mt-6" type="button">
-                  {plan.cta}
+                <Button
+                  className="mt-6 bg-white text-black hover:bg-gray-100 dark:bg-white dark:text-black"
+                  type="button"
+                  onClick={() => startCheckout(plan.tier)}
+                  disabled={isLoading || (plan.tier === "premium" && !isGuestInputValid)}
+                >
+                  {isLoading ? "Redirecting..." : plan.cta}
                 </Button>
               </div>
             );
           })}
         </div>
+        {checkoutError ? (
+          <p className="mt-6 text-center text-sm text-rose-500">{checkoutError}</p>
+        ) : null}
       </Container>
     </section>
   );

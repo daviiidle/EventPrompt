@@ -43,3 +43,11 @@ node scripts/test_supabase_connection.mjs
 ```
 
 This uses the service role key to call the Supabase Auth admin API.
+
+## Event schema
+Add guest limit support for premium SMS tiers:
+
+```sql
+alter table public.events
+  add column if not exists guest_limit integer;
+```
