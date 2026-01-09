@@ -30,12 +30,11 @@ const Button = (props: ButtonProps) => {
   const classes = `${base} ${variants[variant]} ${className}`.trim();
 
   if (isLinkProps(props)) {
-    const { href, className: _className, variant: _variant, ...rest } = props;
+    const { href, ...rest } = props;
     return <a href={href} className={classes} {...rest} />;
   }
 
-  const { className: _className, variant: _variant, href: _href, ...rest } =
-    props;
+  const { ...rest } = props;
   return <button className={classes} {...rest} />;
 };
 
