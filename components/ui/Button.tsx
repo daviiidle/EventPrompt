@@ -14,7 +14,11 @@ type ButtonAsLink = AnchorHTMLAttributes<HTMLAnchorElement> & {
 
 type ButtonProps = ButtonAsButton | ButtonAsLink;
 
-const Button = ({ variant = "primary", className = "", ...props }: ButtonProps) => {
+const isLinkProps = (props: ButtonProps): props is ButtonAsLink =>
+  typeof props.href === "string";
+
+const Button = (props: ButtonProps) => {
+  const { variant = "primary", className = "" } = props;
   const base =
     "inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold transition shadow-sm";
   const variants = {
@@ -25,12 +29,14 @@ const Button = ({ variant = "primary", className = "", ...props }: ButtonProps) 
 
   const classes = `${base} ${variants[variant]} ${className}`.trim();
 
-  if ("href" in props && props.href) {
-    const { href, ...rest } = props;
+  if (isLinkProps(props)) {
+    const { href, className: _className, variant: _variant, ...rest } = props;
     return <a href={href} className={classes} {...rest} />;
   }
 
-  return <button className={classes} {...props} />;
+  const { className: _className, variant: _variant, href: _href, ...rest } =
+    props;
+  return <button className={classes} {...rest} />;
 };
 
 export default Button;
