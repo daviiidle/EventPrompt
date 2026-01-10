@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
+export const dynamic = "force-dynamic";
+
 type EventRow = {
   id: string;
   paid: boolean | null;
@@ -23,7 +25,7 @@ function isUuidLike(value: string) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   const accessToken = getBearerToken(request);
   if (!accessToken) {
@@ -58,10 +60,22 @@ export async function GET(
     );
   }
 
-  const eventId = params.eventId?.trim();
-  if (!eventId || !isUuidLike(eventId)) {
+  const resolvedParams = await params;
+  const raw = resolvedParams.eventId ?? "";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    decoded = raw;
+  }
+  const uuidMatch =
+    decoded.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  const clean = uuidMatch?.[0] ?? "";
+  if (!clean || !isUuidLike(clean)) {
+    const debug =
+      process.env.NODE_ENV !== "production" ? { raw, decoded, clean } : undefined;
     return NextResponse.json(
-      { ok: false, error: "Invalid or missing eventId." },
+      { ok: false, error: "Invalid or missing eventId.", debug },
       { status: 400 }
     );
   }
@@ -71,7 +85,7 @@ export async function GET(
   const { data: event, error: fetchError } = await adminClient
     .from("events")
     .select("id, paid, owner_user_id")
-    .eq("id", eventId)
+    .eq("id", clean)
     .maybeSingle<EventRow>();
 
   if (fetchError) {
@@ -105,7 +119,7 @@ export async function GET(
   const { data: photos, error: photosError } = await adminClient
     .from("event_photos")
     .select("id, event_id, object_key, content_type, uploaded_by, created_at")
-    .eq("event_id", eventId)
+    .eq("event_id", clean)
     .order("created_at", { ascending: false });
 
   if (photosError) {

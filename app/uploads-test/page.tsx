@@ -17,6 +17,7 @@ const UploadsTestPage = () => {
   const [output, setOutput] = useState<UploadState>({});
 
   const runUpload = async () => {
+    const cleanEventId = eventId.trim();
     setStatus("");
     setOutput({});
 
@@ -45,7 +46,7 @@ const UploadsTestPage = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          eventId,
+          eventId: cleanEventId,
           filename: file.name,
           contentType: file.type || "application/octet-stream",
         }),
@@ -88,19 +89,22 @@ const UploadsTestPage = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          eventId,
+          eventId: cleanEventId,
           objectKey: createJson.objectKey,
           contentType: file.type || "application/octet-stream",
         }),
       });
 
       const recordJson = (await recordRes.json()) as unknown;
-      const listRes = await fetch(`/api/events/${eventId}/photos`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const listRes = await fetch(
+        `/api/events/${encodeURIComponent(cleanEventId)}/photos`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
       const listJson = (await listRes.json()) as unknown;
 
