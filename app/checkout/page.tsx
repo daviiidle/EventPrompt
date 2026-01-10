@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   PREMIUM_GUEST_INPUT_MAX,
   PREMIUM_GUEST_INPUT_MIN,
   PREMIUM_TIERS,
   snapToTier,
 } from "@/lib/pricingTiers";
+import { supabase } from "@/lib/supabaseClient";
 
 const STANDARD_PRICE = 129;
 
@@ -15,6 +16,8 @@ export default function CheckoutPage() {
   const [desiredGuests, setDesiredGuests] = useState(75);
   const [loadingTier, setLoadingTier] = useState<null | "standard" | "premium">(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [ownerEmail, setOwnerEmail] = useState("");
 
   const parsedGuestLimit = Number(premiumGuestInput);
   const isGuestInputValid =
@@ -25,6 +28,29 @@ export default function CheckoutPage() {
   const selectedTier = useMemo(() => snapToTier(desiredGuests), [desiredGuests]);
   const maxTier = PREMIUM_TIERS[PREMIUM_TIERS.length - 1];
   const isClamped = desiredGuests > maxTier.limit;
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSession = async () => {
+      const { data } = await supabase.auth.getUser();
+      const email = data.user?.email?.trim().toLowerCase() ?? null;
+      if (isMounted) {
+        setSessionEmail(email);
+      }
+    };
+
+    loadSession().catch(() => null);
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const email = session?.user?.email?.trim().toLowerCase() ?? null;
+      setSessionEmail(email);
+    });
+
+    return () => {
+      isMounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
 
   const formatPrice = (value: number) => {
     return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2);
@@ -41,13 +67,19 @@ export default function CheckoutPage() {
         );
       }
 
+      const resolvedEmail = (sessionEmail ?? ownerEmail).trim().toLowerCase();
+      if (!resolvedEmail) {
+        throw new Error("Enter your email to continue checkout.");
+      }
+
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           tier,
-          guestLimit: tier === "premium" ? selectedTier.limit : undefined,
+          guest_limit: tier === "premium" ? selectedTier.limit : undefined,
+          owner_email: resolvedEmail,
         }),
       });
 
@@ -72,10 +104,26 @@ export default function CheckoutPage() {
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Checkout testing</p>
           <h1 className="mt-3 text-3xl font-semibold">Stripe Checkout test page</h1>
           <p className="mt-2 text-sm text-slate-300">
-            Use this page to test Checkout end-to-end. You must be logged in so the API can
-            create an event for your account.
+            Use this page to test Checkout end-to-end.
           </p>
         </header>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Checkout email
+          </p>
+          {sessionEmail ? (
+            <p className="mt-3 text-sm text-slate-200">{sessionEmail}</p>
+          ) : (
+            <input
+              type="email"
+              value={ownerEmail}
+              onChange={(event) => setOwnerEmail(event.target.value)}
+              placeholder="you@example.com"
+              className="mt-3 w-full rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-white"
+            />
+          )}
+        </div>
 
         {errorMessage ? (
           <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-100">

@@ -10,7 +10,7 @@ import GuestTokenPanel from "./GuestTokenPanel";
 export const dynamic = "force-dynamic";
 
 type DashboardPageProps = {
-  searchParams?: { event?: string };
+  searchParams?: Promise<{ event?: string }>;
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -67,7 +67,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
   }
 
-  const requestedEventId = searchParams?.event ?? "";
+  const resolvedSearchParams = await searchParams;
+  const requestedEventId = resolvedSearchParams?.event ?? "";
   const activeEvent =
     events.find((event) => event.id === requestedEventId) ?? events[0];
 

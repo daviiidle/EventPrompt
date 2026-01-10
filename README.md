@@ -83,6 +83,10 @@ API routes:
 - `POST /api/stripe/create-checkout` creates an event and returns a Checkout URL.
 - `POST /api/stripe/webhook` verifies Stripe signatures and marks events paid.
 
+Webhook local dev:
+- Run `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+- Copy the `whsec_...` secret into `STRIPE_WEBHOOK_SECRET` in `.env.local`, then restart the dev server.
+
 Test page:
 - Visit `/checkout` to run a basic checkout flow with Standard/Premium buttons.
 

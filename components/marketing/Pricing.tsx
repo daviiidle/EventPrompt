@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HiCheck } from "react-icons/hi2";
 import Container from "components/ui/Container";
 import Button from "components/ui/Button";
 import { marketingCopy } from "content/marketing";
+import { supabase } from "@/lib/supabaseClient";
 import {
   PREMIUM_GUEST_INPUT_MAX,
   PREMIUM_GUEST_INPUT_MIN,
@@ -17,6 +18,8 @@ const Pricing = () => {
   const [premiumGuestInput, setPremiumGuestInput] = useState("75");
   const [desiredGuests, setDesiredGuests] = useState(75);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [ownerEmail, setOwnerEmail] = useState("");
 
   const parsedGuestLimit = Number(premiumGuestInput);
   const isGuestInputValid =
@@ -28,6 +31,29 @@ const Pricing = () => {
   const maxTier = PREMIUM_TIERS[PREMIUM_TIERS.length - 1];
   const isClamped = desiredGuests > maxTier.limit;
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadSession = async () => {
+      const { data } = await supabase.auth.getUser();
+      const email = data.user?.email?.trim().toLowerCase() ?? null;
+      if (isMounted) {
+        setSessionEmail(email);
+      }
+    };
+
+    loadSession().catch(() => null);
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const email = session?.user?.email?.trim().toLowerCase() ?? null;
+      setSessionEmail(email);
+    });
+
+    return () => {
+      isMounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
   const startCheckout = async (tier: "standard" | "premium") => {
     setCheckoutError(null);
     setLoadingTier(tier);
@@ -38,22 +64,25 @@ const Pricing = () => {
         );
       }
 
+      const resolvedEmail = (sessionEmail ?? ownerEmail).trim().toLowerCase();
+      if (!resolvedEmail) {
+        throw new Error("Enter your email to continue checkout.");
+      }
+
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           tier,
-          guestLimit: tier === "premium" ? selectedTier.limit : undefined,
+          guest_limit: tier === "premium" ? selectedTier.limit : undefined,
+          owner_email: resolvedEmail,
         }),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
 
       if (!response.ok || !payload.url) {
-        if (response.status === 401) {
-          throw new Error("Please sign in before starting checkout.");
-        }
         throw new Error(payload.error ?? "Unable to start checkout.");
       }
 
@@ -122,7 +151,32 @@ const Pricing = () => {
             Over {maxTier.limit}? You’re on the largest tier. Contact us for bigger events.
           </p>
         ) : null}
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="mt-6 flex flex-col items-center gap-3 text-center text-sm text-gray-600 dark:text-gray-300">
+          {sessionEmail ? (
+            <p>
+              Checkout email: <span className="font-semibold text-gray-900 dark:text-white">{sessionEmail}</span>
+            </p>
+          ) : (
+            <div className="w-full max-w-sm">
+              <label
+                htmlFor="pricing-email"
+                className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+              >
+                Email for checkout
+              </label>
+              <input
+                id="pricing-email"
+                type="email"
+                value={ownerEmail}
+                onChange={(event) => setOwnerEmail(event.target.value)}
+                placeholder="you@example.com"
+                className="mt-2 w-full rounded-full border border-white/70 bg-white/80 px-4 py-2 text-sm text-gray-900 shadow-sm backdrop-blur focus:outline-none dark:border-gray-800 dark:bg-gray-900/70 dark:text-white"
+              />
+              <div className="mt-2 h-4" aria-hidden="true" />
+            </div>
+          )}
+        </div>
+        <div className="grid gap-8 md:grid-cols-2">
           {marketingCopy.pricing.plans.map((plan) => {
             const isLoading = loadingTier === plan.tier;
             const price =

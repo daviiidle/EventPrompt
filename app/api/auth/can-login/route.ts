@@ -45,9 +45,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      canLogin: false,
+      canLogin: true,
       message:
-        "This account does not have a paid event yet. Please complete checkout first.",
+        "We found your event but payment has not fully synced yet. You can still sign in.",
     });
   }
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import NavBar from "components/marketing/NavBar";
 import Footer from "components/marketing/Footer";
@@ -12,6 +13,14 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const paramEmail = searchParams.get("email")?.trim();
+    if (paramEmail && !email) {
+      setEmail(paramEmail);
+    }
+  }, [searchParams, email]);
 
   const sendMagicLink = async () => {
     setStatus("");

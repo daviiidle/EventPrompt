@@ -5,15 +5,16 @@ import { getTokenInfoByToken, isTokenExpired } from "@/lib/guestTokens";
 export const dynamic = "force-dynamic";
 
 type GuestUploadPageProps = {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 };
 
 export default async function GuestUploadPage({ params }: GuestUploadPageProps) {
-  let rawToken = params.token ?? "";
+  const resolvedParams = await params;
+  let rawToken = resolvedParams.token ?? "";
   try {
     rawToken = decodeURIComponent(rawToken);
   } catch {
-    rawToken = params.token ?? "";
+    rawToken = resolvedParams.token ?? "";
   }
 
   const token = rawToken.trim();

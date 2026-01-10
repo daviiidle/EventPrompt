@@ -8,8 +8,8 @@ type Tier = "standard" | "premium";
 
 type CreateCheckoutBody = {
   tier?: Tier;
-  guestLimit?: number;
-  email?: string;
+  guest_limit?: number;
+  owner_email?: string;
 };
 
 const REQUIRED_ENV_VARS = ["STRIPE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
   }
 
-  const guestLimit = body.guestLimit;
+  const guestLimit = body.guest_limit;
   if (tier === "premium") {
     if (
       typeof guestLimit !== "number" ||
@@ -79,10 +79,6 @@ export async function POST(req: NextRequest) {
   }
 
   const accessToken = getAccessToken(req);
-  const allowUnauthenticated = process.env.ALLOW_UNAUTHENTICATED_CHECKOUT === "true";
-  if (!accessToken && !allowUnauthenticated) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -95,19 +91,21 @@ export async function POST(req: NextRequest) {
     const { data: userData, error: userError } =
       await supabase.auth.getUser(accessToken);
 
-    if (userError || !userData.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!userError && userData.user) {
+      ownerUserId = userData.user.id;
+      ownerEmail = userData.user.email
+        ? userData.user.email.trim().toLowerCase()
+        : null;
     }
-
-    ownerUserId = userData.user.id;
-    ownerEmail = userData.user.email
-      ? userData.user.email.trim().toLowerCase()
-      : null;
   }
 
-  const requestEmail = body.email?.trim().toLowerCase();
+  const requestEmail = body.owner_email?.trim().toLowerCase();
   if (requestEmail) {
     ownerEmail = requestEmail;
+  }
+
+  if (!ownerEmail) {
+    return NextResponse.json({ error: "Email is required for checkout." }, { status: 400 });
   }
 
   const eventPayload = {
@@ -156,7 +154,7 @@ export async function POST(req: NextRequest) {
     session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
-      success_url: `${appUrl}/checkout/success`,
+      success_url: `${appUrl}/checkout/success?email=${encodeURIComponent(ownerEmail)}`,
       cancel_url: `${appUrl}/checkout/cancel`,
       ...(ownerEmail ? { customer_email: ownerEmail } : {}),
       metadata: {
