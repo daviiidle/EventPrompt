@@ -151,4 +151,4 @@ export const marketingCopy = {
   footer: {
     note: "© 2024 Acme. All rights reserved.",
   },
-};
+} as const;

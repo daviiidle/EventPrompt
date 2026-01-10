@@ -3,8 +3,18 @@ import { supabaseFetch } from "./supabase";
 import { sendSms } from "./twilio";
 import { debugAuthFail, json, type Env } from "./utils";
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+type ExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+  passThroughOnException?: () => void;
+};
+
+type ScheduledEvent = {
+  scheduledTime: number;
+  cron: string;
+};
+
+const worker = {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {
@@ -34,6 +44,8 @@ export default {
     ctx.waitUntil(processDueReminders(env, 5));
   },
 };
+
+export default worker;
 
 async function healthCheck(env: Env): Promise<Response> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {

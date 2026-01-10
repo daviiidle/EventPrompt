@@ -6,7 +6,20 @@ interface ReminderRow {
   id: number | string;
   reminder_step: number;
   next_reminder_at?: string | null;
-  households?: any;
+  households?: Household | null;
+}
+
+interface Household {
+  id: number | string;
+  household_name?: string | null;
+  phone_e164?: string | null;
+  sms_opt_out?: boolean | null;
+  rsvp_attending?: boolean | null;
+  events?: Event | null;
+}
+
+interface Event {
+  event_date?: string | null;
 }
 
 export async function fetchDueReminders(
@@ -56,8 +69,8 @@ export function nextStep(step: number): number | null {
 }
 
 export function buildMessage(args: {
-  household: any;
-  event: any;
+  household: Household;
+  event: Event;
   reminderStep: number;
 }): string {
   const eventDate = args.event?.event_date ?? "(unknown date)";
@@ -219,7 +232,7 @@ export async function processDueReminders(
             error_message: String((err as Error)?.message || err),
           });
         }
-      } catch (_) {
+      } catch {
         // ignore logging errors
       }
 

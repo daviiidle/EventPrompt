@@ -31,4 +31,37 @@ Tailwind CSS is used for styling, and Next Themes is used for dark mode. React I
 
 - Supabase setup and secret handling: `docs/supabase.md`
 
+### Stripe Checkout (one-time payments)
+
+This project uses Stripe Checkout for one-off payments and unlocks features via `events.tier` and `events.paid`.
+
+Key behaviors:
+- Standard: A$129 flat (no SMS, no seating).
+- Premium: dynamic pricing based on guest count (min 50, max 1000).
+- Premium pricing formula: `A$179 + (guest_count - 50) * A$0.40`.
+- Only Stripe webhooks mark an event as paid.
+- Premium includes 3 SMS reminders (21, 10, 3 days before the event).
+
+Required environment variables:
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_STANDARD` (Stripe Price ID for A$129)
+- `NEXT_PUBLIC_APP_URL` (optional; falls back to request origin)
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+
+Optional dev-only flag:
+- `ALLOW_UNAUTHENTICATED_CHECKOUT=true` allows checkout without auth for local testing.
+
+API routes:
+- `POST /api/stripe/create-checkout` creates an event and returns a Checkout URL.
+- `POST /api/stripe/webhook` verifies Stripe signatures and marks events paid.
+
+Test page:
+- Visit `/checkout` to run a basic checkout flow with Standard/Premium buttons.
+
+Database notes:
+- Ensure `events` exists with `guest_limit`, `tier`, `paid`, and Stripe IDs.
+- For early testing, `event_date` and `timezone` can be nullable.
+
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/talhatahir)
