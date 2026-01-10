@@ -8,10 +8,10 @@ const NavBar = () => {
   const [open, setOpen] = useState(false);
 
   const links = [
-    { label: "How it works", href: "#how-it-works" },
-    { label: "Features", href: "#features" },
-    { label: "Pricing", href: "#pricing" },
-    { label: "FAQ", href: "#faq" },
+    { label: "How it works", href: "/#how-it-works" },
+    { label: "Features", href: "/#features" },
+    { label: "Pricing", href: "/#pricing" },
+    { label: "FAQ", href: "/#faq" },
   ];
 
   return (
@@ -25,7 +25,10 @@ const NavBar = () => {
                 {link.label}
               </a>
             ))}
-            <Button type="button">Get started</Button>
+            <a href="/login" className="transition hover:text-gray-900 dark:hover:text-white">
+              Login
+            </a>
+            <Button href="/#pricing">Get started</Button>
           </nav>
           <button
             type="button"
@@ -52,7 +55,16 @@ const NavBar = () => {
                   {link.label}
                 </a>
               ))}
-              <Button type="button">Get started</Button>
+              <a
+                href="/login"
+                className="transition hover:text-gray-900 dark:hover:text-white"
+                onClick={() => setOpen(false)}
+              >
+                Login
+              </a>
+              <Button href="/#pricing" onClick={() => setOpen(false)}>
+                Get started
+              </Button>
             </div>
           </div>
         ) : null}

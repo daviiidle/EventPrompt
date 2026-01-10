@@ -21,8 +21,33 @@ const AuthCallbackPage = () => {
       }
 
       if (data.session) {
-        router.replace("/auth-test");
-        return;
+        try {
+          const res = await fetch("/api/auth/set-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              accessToken: data.session.access_token,
+              refreshToken: data.session.refresh_token,
+            }),
+          });
+
+          if (!res.ok) {
+            const payload = (await res.json().catch(() => null)) as
+              | { error?: string }
+              | null;
+            const message = payload?.error ?? "Failed to store session.";
+            setStatus(`Error: ${message}`);
+            return;
+          }
+
+          router.replace("/dashboard");
+          return;
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Failed to store session.";
+          setStatus(`Error: ${message}`);
+          return;
+        }
       }
 
       setStatus("No session found. Try logging in again.");

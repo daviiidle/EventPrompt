@@ -21,7 +21,7 @@ const Hero = () => {
             {marketingCopy.hero.subheading}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Button type="button">{marketingCopy.hero.primaryCta}</Button>
+            <Button href="/login">{marketingCopy.hero.primaryCta}</Button>
             <Button variant="secondary" href="#demo">
               {marketingCopy.hero.secondaryCta}
             </Button>

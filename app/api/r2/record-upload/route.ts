@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     event_id: eventId,
     object_key: objectKey,
     content_type: contentType,
-    uploaded_by: authData.user.id,
+    uploaded_by: "owner",
   });
 
   if (insertError) {

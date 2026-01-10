@@ -31,6 +31,22 @@ Tailwind CSS is used for styling, and Next Themes is used for dark mode. React I
 
 - Supabase setup and secret handling: `docs/supabase.md`
 
+### Guest uploads flow
+
+Owner flow:
+- Log in at `/login` and complete the magic link.
+- Visit `/dashboard` to view event status and the guest upload link.
+- Use “Rotate” to invalidate old links immediately and generate a new QR code.
+
+Guest flow:
+- Guests open `/u/<token>` without logging in.
+- Uploads call `POST /api/r2/guest-create-upload-url` → PUT to R2 → `POST /api/r2/guest-record-upload`.
+- Guest uploads insert into `event_photos` with `uploaded_by='guest'` and `guest_token_id`.
+
+Guardrails:
+- Tokens are random, single active per event, and can expire after the event date.
+- Guest endpoints validate token status and paid events, plus file type/size caps.
+
 ### Stripe Checkout (one-time payments)
 
 This project uses Stripe Checkout for one-off payments and unlocks features via `events.tier` and `events.paid`.

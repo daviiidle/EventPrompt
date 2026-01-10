@@ -22,7 +22,7 @@ const FinalCTA = () => {
             <p className="mx-auto mt-3 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
               {marketingCopy.finalCta.subheading}
             </p>
-            <Button className="mt-6" type="button">
+            <Button className="mt-6" href="#pricing">
               {marketingCopy.finalCta.cta}
             </Button>
           </div>

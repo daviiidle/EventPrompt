@@ -1,10 +1,7 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getR2Client } from "@/lib/r2";
+import { buildOwnerObjectKey, createSignedUploadUrl } from "@/lib/r2Uploads";
 
 type EventRow = {
   id: string;
@@ -23,22 +20,6 @@ function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value
   );
-}
-
-function formatTimestamp(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  const yyyy = date.getUTCFullYear();
-  const mm = pad(date.getUTCMonth() + 1);
-  const dd = pad(date.getUTCDate());
-  const hh = pad(date.getUTCHours());
-  const min = pad(date.getUTCMinutes());
-  const ss = pad(date.getUTCSeconds());
-  return `${yyyy}${mm}${dd}-${hh}${min}${ss}`;
-}
-
-function sanitizeFilename(filename: string) {
-  const base = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return base.length > 0 ? base : "upload.bin";
 }
 
 export async function POST(request: NextRequest) {
@@ -135,28 +116,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const timestamp = formatTimestamp(new Date());
-  const randomSuffix = randomBytes(3).toString("hex");
-  const safeName = sanitizeFilename(filename);
-  const objectKey = `events/${eventId}/${timestamp}-${randomSuffix}-${safeName}`;
-
-  const bucket = process.env.R2_BUCKET_NAME;
-  if (!bucket) {
-    return NextResponse.json(
-      { ok: false, error: "Missing R2 bucket configuration." },
-      { status: 500 }
-    );
+  const objectKey = buildOwnerObjectKey(eventId, filename);
+  let uploadUrl: string;
+  let expiresIn: number;
+  try {
+    const signed = await createSignedUploadUrl({
+      objectKey,
+      contentType,
+      expiresIn: 60,
+    });
+    uploadUrl = signed.uploadUrl;
+    expiresIn = signed.expiresIn;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to sign upload URL.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-
-  const r2 = getR2Client();
-  const command = new PutObjectCommand({
-    Bucket: bucket,
-    Key: objectKey,
-    ContentType: contentType,
-  });
-
-  const expiresIn = 60;
-  const uploadUrl = await getSignedUrl(r2, command, { expiresIn });
 
   return NextResponse.json({
     ok: true,
