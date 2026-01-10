@@ -3,12 +3,14 @@
 ## Standard
 - `STRIPE_PRICE_STANDARD` (A$129)
 
-## Premium (dynamic pricing)
-Premium pricing is calculated per guest and passed to Stripe as `price_data`.
+## Premium (tiered pricing)
+Premium pricing uses fixed Stripe Price IDs per guest-limit bucket.
 
-Formula:
-- Base A$179 for the first 50 guests
-- +A$0.40 per additional guest
-- Min 50 guests, max 1000 guests
+Required env vars:
+- `STRIPE_PRICE_PREMIUM_50` (up to 50 guests)
+- `STRIPE_PRICE_PREMIUM_100` (up to 100 guests)
+- `STRIPE_PRICE_PREMIUM_150` (up to 150 guests)
+- `STRIPE_PRICE_PREMIUM_200` (up to 200 guests)
+- `STRIPE_PRICE_PREMIUM_300` (up to 300 guests)
 
-No Stripe Price IDs are required for Premium.
+Guest counts snap up to the next bucket. Limits above the max tier are clamped.

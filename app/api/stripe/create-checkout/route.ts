@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { isPremiumTierLimit } from "@/lib/pricingTiers";
+import { getPremiumPriceIdForLimit, getStandardPriceId } from "@/lib/stripePrices";
 
 type Tier = "standard" | "premium";
 
 type CreateCheckoutBody = {
   tier?: Tier;
   guestLimit?: number;
+  email?: string;
 };
-
-const PRICE_BY_TIER: Record<Exclude<Tier, "premium">, string | undefined> = {
-  standard: process.env.STRIPE_PRICE_STANDARD,
-};
-
-const PREMIUM_GUEST_MIN = 50;
-const PREMIUM_GUEST_MAX = 1000;
-const PREMIUM_BASE_CENTS = 17900;
-const PREMIUM_PER_GUEST_CENTS = 40;
 
 const REQUIRED_ENV_VARS = ["STRIPE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -63,8 +57,7 @@ export async function POST(req: NextRequest) {
     if (
       typeof guestLimit !== "number" ||
       !Number.isFinite(guestLimit) ||
-      guestLimit < PREMIUM_GUEST_MIN ||
-      guestLimit > PREMIUM_GUEST_MAX
+      !isPremiumTierLimit(guestLimit)
     ) {
       return NextResponse.json(
         { error: "Invalid guest limit for premium tier" },
@@ -73,17 +66,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const priceId = tier === "standard" ? PRICE_BY_TIER[tier] : undefined;
-  if (tier === "standard" && !priceId) {
-    return NextResponse.json(
-      {
-        error:
-          tier === "standard"
-            ? `Missing Stripe price ID for tier: ${tier}`
-            : "Missing Stripe price ID for premium tier",
-      },
-      { status: 500 }
-    );
+  let priceId: string | null = null;
+  try {
+    if (tier === "standard") {
+      priceId = getStandardPriceId();
+    } else if (tier === "premium" && typeof guestLimit === "number") {
+      priceId = getPremiumPriceIdForLimit(guestLimit);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Missing Stripe price ID.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const accessToken = getAccessToken(req);
@@ -98,6 +90,7 @@ export async function POST(req: NextRequest) {
   });
 
   let ownerUserId: string | null = null;
+  let ownerEmail: string | null = null;
   if (accessToken) {
     const { data: userData, error: userError } =
       await supabase.auth.getUser(accessToken);
@@ -107,6 +100,14 @@ export async function POST(req: NextRequest) {
     }
 
     ownerUserId = userData.user.id;
+    ownerEmail = userData.user.email
+      ? userData.user.email.trim().toLowerCase()
+      : null;
+  }
+
+  const requestEmail = body.email?.trim().toLowerCase();
+  if (requestEmail) {
+    ownerEmail = requestEmail;
   }
 
   const eventPayload = {
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
     paid: false,
     guest_limit: tier === "premium" ? guestLimit : null,
     ...(ownerUserId ? { owner_user_id: ownerUserId } : {}),
+    ...(ownerEmail ? { owner_email: ownerEmail } : {}),
   };
 
   const { data: eventData, error: eventError } = await supabase
@@ -140,29 +142,23 @@ export async function POST(req: NextRequest) {
 
   let session: Stripe.Checkout.Session;
   try {
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
-      tier === "premium"
-        ? [
-            {
-              price_data: {
-                currency: "aud",
-                product_data: {
-                  name: "Premium",
-                },
-                unit_amount:
-                  PREMIUM_BASE_CENTS +
-                  Math.max(0, guestLimit! - PREMIUM_GUEST_MIN) * PREMIUM_PER_GUEST_CENTS,
-              },
-              quantity: 1,
-            },
-          ]
-        : [{ price: priceId!, quantity: 1 }];
+    if (!priceId) {
+      return NextResponse.json(
+        { error: "Missing Stripe price ID for selected tier." },
+        { status: 500 }
+      );
+    }
+
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      { price: priceId, quantity: 1 },
+    ];
 
     session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
       success_url: `${appUrl}/checkout/success`,
       cancel_url: `${appUrl}/checkout/cancel`,
+      ...(ownerEmail ? { customer_email: ownerEmail } : {}),
       metadata: {
         eventId: eventData.id,
         tier,

@@ -20,11 +20,34 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   const adminClient = createAdminClient();
-  const { data: events, error: eventsError } = await adminClient
+  let { data: events, error: eventsError } = await adminClient
     .from("events")
     .select("*")
     .eq("owner_user_id", user.id)
     .order("created_at", { ascending: false });
+
+  if ((!events || events.length === 0) && user.email) {
+    const normalizedEmail = user.email.trim().toLowerCase();
+    const { data: emailEvents, error: emailError } = await adminClient
+      .from("events")
+      .select("*")
+      .eq("owner_email", normalizedEmail)
+      .order("created_at", { ascending: false });
+
+    if (!emailError && emailEvents && emailEvents.length > 0) {
+      events = emailEvents;
+      eventsError = null;
+
+      const unlinked = emailEvents.find((event) => !event.owner_user_id);
+      if (unlinked?.id) {
+        await adminClient
+          .from("events")
+          .update({ owner_user_id: user.id })
+          .eq("id", unlinked.id)
+          .is("owner_user_id", null);
+      }
+    }
+  }
 
   if (eventsError) {
     return (

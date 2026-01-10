@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { isPremiumTierLimit } from "@/lib/pricingTiers";
 
 export const runtime = "nodejs";
-
-const PREMIUM_GUEST_MIN = 50;
-const PREMIUM_GUEST_MAX = 1000;
 
 const REQUIRED_ENV_VARS = [
   "STRIPE_SECRET_KEY",
@@ -83,6 +81,15 @@ export async function POST(req: NextRequest) {
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
 
+  const rawEmail =
+    session.customer_details?.email ??
+    session.customer_email ??
+    null;
+  const ownerEmail =
+    typeof rawEmail === "string" && rawEmail.trim().length > 0
+      ? rawEmail.trim().toLowerCase()
+      : null;
+
   const guestLimit =
     tier === "premium" && guestLimitValue ? Number(guestLimitValue) : null;
 
@@ -90,8 +97,7 @@ export async function POST(req: NextRequest) {
     tier === "premium" &&
     (!guestLimit ||
       !Number.isFinite(guestLimit) ||
-      guestLimit < PREMIUM_GUEST_MIN ||
-      guestLimit > PREMIUM_GUEST_MAX)
+      !isPremiumTierLimit(guestLimit))
   ) {
     return NextResponse.json(
       { error: "Invalid guest limit on checkout session" },
@@ -99,16 +105,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const updatePayload: Record<string, unknown> = {
+    paid: true,
+    tier,
+    paid_at: new Date().toISOString(),
+    stripe_payment_intent_id: paymentIntentId,
+    stripe_checkout_session_id: session.id,
+    guest_limit: guestLimit,
+  };
+
+  if (ownerEmail) {
+    updatePayload.owner_email = ownerEmail;
+  }
+
   const { error: updateError } = await supabase
     .from("events")
-    .update({
-      paid: true,
-      tier,
-      paid_at: new Date().toISOString(),
-      stripe_payment_intent_id: paymentIntentId,
-      stripe_checkout_session_id: session.id,
-      guest_limit: guestLimit,
-    })
+    .update(updatePayload)
     .eq("id", eventId);
 
   if (updateError) {

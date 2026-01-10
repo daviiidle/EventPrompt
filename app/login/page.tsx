@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import NavBar from "components/marketing/NavBar";
 import Footer from "components/marketing/Footer";
@@ -22,6 +23,38 @@ const LoginPage = () => {
 
     setIsSending(true);
     try {
+      let gatePayload: { ok?: boolean; canLogin?: boolean; message?: string } | null =
+        null;
+      try {
+        const gateRes = await fetch("/api/auth/can-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+
+        gatePayload = (await gateRes.json().catch(() => null)) as
+          | { ok?: boolean; canLogin?: boolean; message?: string }
+          | null;
+
+        if (!gateRes.ok || !gatePayload?.ok) {
+          setStatus(gatePayload?.message ?? "Unable to verify account status.");
+          return;
+        }
+      } catch {
+        setStatus(
+          "We couldn’t verify your account status. Please try again or complete checkout first."
+        );
+        return;
+      }
+
+      if (gatePayload?.canLogin === false) {
+        setStatus(
+          gatePayload.message ??
+            "This account does not have a paid event yet. Please complete checkout first."
+        );
+        return;
+      }
+
       const redirectTo = `${window.location.origin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
@@ -86,7 +119,18 @@ const LoginPage = () => {
                 </Button>
               </div>
               {status ? (
-                <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">{status}</p>
+                <div className="mt-4 rounded-2xl border border-gray-200/70 bg-white/70 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-200">
+                  <p>{status}</p>
+                  {status.toLowerCase().includes("paid event") ||
+                  status.toLowerCase().includes("checkout") ? (
+                    <Link
+                      href="/#pricing"
+                      className="mt-2 inline-flex text-sm font-semibold text-gray-900 underline dark:text-white"
+                    >
+                      View pricing
+                    </Link>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>

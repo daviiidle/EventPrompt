@@ -47,6 +47,11 @@ Guardrails:
 - Tokens are random, single active per event, and can expire after the event date.
 - Guest endpoints validate token status and paid events, plus file type/size caps.
 
+Owner email gating:
+- `events.owner_email` is stored at checkout (and confirmed via Stripe webhook).
+- Login checks paid status by matching the entered email against `events.owner_email`.
+- On first login, the event is linked to `owner_user_id` when emails match.
+
 ### Stripe Checkout (one-time payments)
 
 This project uses Stripe Checkout for one-off payments and unlocks features via `events.tier` and `events.paid`.
@@ -62,6 +67,11 @@ Required environment variables:
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_STANDARD` (Stripe Price ID for A$129)
+- `STRIPE_PRICE_PREMIUM_50`
+- `STRIPE_PRICE_PREMIUM_100`
+- `STRIPE_PRICE_PREMIUM_150`
+- `STRIPE_PRICE_PREMIUM_200`
+- `STRIPE_PRICE_PREMIUM_300`
 - `NEXT_PUBLIC_APP_URL` (optional; falls back to request origin)
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`

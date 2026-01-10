@@ -1,28 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  PREMIUM_GUEST_INPUT_MAX,
+  PREMIUM_GUEST_INPUT_MIN,
+  PREMIUM_TIERS,
+  snapToTier,
+} from "@/lib/pricingTiers";
 
 const STANDARD_PRICE = 129;
-const PREMIUM_BASE_PRICE = 179;
-const PREMIUM_MIN_GUESTS = 50;
-const PREMIUM_MAX_GUESTS = 1000;
-const PREMIUM_PER_GUEST = 0.4;
 
 export default function CheckoutPage() {
-  const [premiumGuestInput, setPremiumGuestInput] = useState("50");
-  const [premiumGuestLimit, setPremiumGuestLimit] = useState(50);
+  const [premiumGuestInput, setPremiumGuestInput] = useState("75");
+  const [desiredGuests, setDesiredGuests] = useState(75);
   const [loadingTier, setLoadingTier] = useState<null | "standard" | "premium">(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parsedGuestLimit = Number(premiumGuestInput);
   const isGuestInputValid =
     Number.isFinite(parsedGuestLimit) &&
-    parsedGuestLimit >= PREMIUM_MIN_GUESTS &&
-    parsedGuestLimit <= PREMIUM_MAX_GUESTS;
+    parsedGuestLimit >= PREMIUM_GUEST_INPUT_MIN &&
+    parsedGuestLimit <= PREMIUM_GUEST_INPUT_MAX;
 
-  const premiumPrice = useMemo(() => {
-    return PREMIUM_BASE_PRICE + Math.max(0, premiumGuestLimit - PREMIUM_MIN_GUESTS) * PREMIUM_PER_GUEST;
-  }, [premiumGuestLimit]);
+  const selectedTier = useMemo(() => snapToTier(desiredGuests), [desiredGuests]);
+  const maxTier = PREMIUM_TIERS[PREMIUM_TIERS.length - 1];
+  const isClamped = desiredGuests > maxTier.limit;
 
   const formatPrice = (value: number) => {
     return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2);
@@ -34,7 +36,9 @@ export default function CheckoutPage() {
 
     try {
       if (tier === "premium" && !isGuestInputValid) {
-        throw new Error("Enter a guest limit between 50 and 1000.");
+        throw new Error(
+          `Enter a guest count between ${PREMIUM_GUEST_INPUT_MIN} and ${PREMIUM_GUEST_INPUT_MAX}.`
+        );
       }
 
       const response = await fetch("/api/stripe/create-checkout", {
@@ -43,7 +47,7 @@ export default function CheckoutPage() {
         credentials: "include",
         body: JSON.stringify({
           tier,
-          guestLimit: tier === "premium" ? premiumGuestLimit : undefined,
+          guestLimit: tier === "premium" ? selectedTier.limit : undefined,
         }),
       });
 
@@ -96,7 +100,9 @@ export default function CheckoutPage() {
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
             <h2 className="text-lg font-semibold">Premium</h2>
-            <p className="mt-2 text-3xl font-semibold">A${formatPrice(premiumPrice)}</p>
+            <p className="mt-2 text-3xl font-semibold">
+              A${formatPrice(selectedTier.priceCents / 100)}
+            </p>
             <p className="mt-2 text-sm text-slate-300">
               Includes 3 SMS reminders (21, 10, 3 days) and seating arrangements.
             </p>
@@ -106,8 +112,8 @@ export default function CheckoutPage() {
               </label>
               <input
                 type="number"
-                min={PREMIUM_MIN_GUESTS}
-                max={PREMIUM_MAX_GUESTS}
+                min={PREMIUM_GUEST_INPUT_MIN}
+                max={PREMIUM_GUEST_INPUT_MAX}
                 step={1}
                 inputMode="numeric"
                 value={premiumGuestInput}
@@ -117,22 +123,34 @@ export default function CheckoutPage() {
                   const nextNumber = Number(nextValue);
                   if (
                     Number.isFinite(nextNumber) &&
-                    nextNumber >= PREMIUM_MIN_GUESTS &&
-                    nextNumber <= PREMIUM_MAX_GUESTS
+                    nextNumber >= PREMIUM_GUEST_INPUT_MIN &&
+                    nextNumber <= PREMIUM_GUEST_INPUT_MAX
                   ) {
-                    setPremiumGuestLimit(nextNumber);
+                    setDesiredGuests(nextNumber);
                   }
                 }}
                 onBlur={() => {
                   if (!isGuestInputValid) {
-                    setPremiumGuestInput(String(premiumGuestLimit));
+                    setPremiumGuestInput(String(desiredGuests));
                   }
                 }}
                 className="w-28 rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-center text-sm"
               />
-              <span className="text-xs text-slate-400">50–1000</span>
+              <span className="text-xs text-slate-400">
+                {PREMIUM_GUEST_INPUT_MIN}–{PREMIUM_GUEST_INPUT_MAX}
+              </span>
             </div>
-            <p className="mt-3 text-xs text-slate-400">Prices scale by A$0.40 per additional guest.</p>
+            <p className="mt-3 text-xs text-slate-400">
+              Selected: up to {selectedTier.limit} guests.
+            </p>
+            <p className="text-xs text-slate-400">
+              We’ll automatically choose the next size up so you don’t run out on the day.
+            </p>
+            {isClamped ? (
+              <p className="text-xs text-amber-300">
+                Over {maxTier.limit}? You’re on the largest tier. Contact us for bigger events.
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={() => startCheckout("premium")}
