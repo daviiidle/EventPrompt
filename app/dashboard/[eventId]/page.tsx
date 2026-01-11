@@ -3,6 +3,7 @@ import { formatEventDate, getEventTitle } from "@/lib/eventUtils";
 import { getAppUrl } from "@/lib/appUrl";
 import GuestTokenPanel from "../GuestTokenPanel";
 import { ensureActiveGuestToken } from "@/lib/guestTokens";
+import EventNameEditor from "./EventNameEditor";
 
 type OverviewPageProps = {
   params: Promise<{ eventId: string }>;
@@ -50,6 +51,8 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
   const appUrl = await getAppUrl();
   const title = event ? getEventTitle(event) : "Event";
   const eventDate = event ? formatEventDate(event) : null;
+  const rawEventName =
+    (event?.event_name ?? event?.title ?? event?.name ?? event?.event_title) || "";
 
   return (
     <main className="flex flex-col gap-6">
@@ -65,6 +68,8 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
           ) : null}
         </div>
       </section>
+
+      <EventNameEditor eventId={eventId} initialName={rawEventName} />
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">

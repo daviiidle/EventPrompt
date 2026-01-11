@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getServerUser } from "@/lib/serverAuth";
 import { getEventTitle } from "@/lib/eventUtils";
 import Link from "next/link";
+import { refreshStripePaidStatus } from "@/lib/stripeStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,21 @@ export default async function DashboardPage() {
     );
   }
 
-  const paidEvents = (events ?? []).filter((event) => event.paid === true);
+  let resolvedEvents = events ?? [];
+  if (resolvedEvents.some((event) => event.paid !== true)) {
+    const refreshed = [];
+    for (const event of resolvedEvents) {
+      if (event.paid === true) {
+        refreshed.push(event);
+        continue;
+      }
+      const result = await refreshStripePaidStatus(event.id, user.id);
+      refreshed.push(result.event ?? event);
+    }
+    resolvedEvents = refreshed;
+  }
+
+  const paidEvents = resolvedEvents.filter((event) => event.paid === true);
 
   if (!paidEvents || paidEvents.length === 0) {
     return (

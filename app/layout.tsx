@@ -10,8 +10,8 @@ const interTight = Inter_Tight({
 });
 
 export const metadata: Metadata = {
-  title: "Next JS SaaS Starter Template",
-  description: "Next JS SaaS Starter Template",
+  title: "Event Prompt",
+  description: "Event Prompt",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

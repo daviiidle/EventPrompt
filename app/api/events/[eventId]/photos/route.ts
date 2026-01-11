@@ -1,92 +1,36 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAccessTokenFromRequest, getUserFromAccessToken } from "@/lib/serverAuth";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getR2Client } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
-
-type EventRow = {
-  id: string;
-  paid: boolean | null;
-  owner_user_id: string | null;
-};
-
-function getBearerToken(request: NextRequest) {
-  const header = request.headers.get("authorization");
-  if (!header) return null;
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match?.[1] ?? null;
-}
-
-function isUuidLike(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    value
-  );
-}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
 ) {
-  const accessToken = getBearerToken(request);
-  if (!accessToken) {
-    return NextResponse.json(
-      { ok: false, error: "Missing or invalid Authorization header." },
-      { status: 401 }
-    );
-  }
+  const accessToken = getAccessTokenFromRequest(request);
+  const user = await getUserFromAccessToken(accessToken);
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.json(
-      { ok: false, error: "Supabase env vars are not configured." },
-      { status: 500 }
-    );
-  }
-
-  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
-
-  const { data: authData, error: authError } = await authClient.auth.getUser(
-    accessToken
-  );
-
-  if (authError || !authData.user) {
-    return NextResponse.json(
-      { ok: false, error: authError?.message ?? "Invalid or expired access token." },
-      { status: 401 }
-    );
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   const resolvedParams = await params;
-  const raw = resolvedParams.eventId ?? "";
-  let decoded = raw;
-  try {
-    decoded = decodeURIComponent(raw);
-  } catch {
-    decoded = raw;
-  }
-  const uuidMatch =
-    decoded.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-  const clean = uuidMatch?.[0] ?? "";
-  if (!clean || !isUuidLike(clean)) {
-    const debug =
-      process.env.NODE_ENV !== "production" ? { raw, decoded, clean } : undefined;
-    return NextResponse.json(
-      { ok: false, error: "Invalid or missing eventId.", debug },
-      { status: 400 }
-    );
+  const eventId = resolvedParams.eventId?.trim();
+  if (!eventId) {
+    return NextResponse.json({ ok: false, error: "Missing event ID." }, { status: 400 });
   }
 
   const adminClient = createAdminClient();
 
   const { data: event, error: fetchError } = await adminClient
     .from("events")
-    .select("id, paid, owner_user_id")
-    .eq("id", clean)
-    .maybeSingle<EventRow>();
+    .select("id, owner_user_id")
+    .eq("id", eventId)
+    .maybeSingle();
 
   if (fetchError) {
     return NextResponse.json(
@@ -102,25 +46,35 @@ export async function GET(
     );
   }
 
-  if (event.paid !== true) {
-    return NextResponse.json(
-      { ok: false, error: "Event not paid" },
-      { status: 403 }
-    );
-  }
-
-  if (event.owner_user_id !== authData.user.id) {
+  if (event.owner_user_id !== user.id) {
     return NextResponse.json(
       { ok: false, error: "Event ownership mismatch." },
       { status: 403 }
     );
   }
 
-  const { data: photos, error: photosError } = await adminClient
+  const { searchParams } = new URL(request.url);
+  const origin = (searchParams.get("origin") ?? "all").toLowerCase();
+  const rawLimit = Number(searchParams.get("limit") ?? 50);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
+  const cursor = searchParams.get("cursor");
+
+  let query = adminClient
     .from("event_photos")
-    .select("id, event_id, object_key, content_type, uploaded_by, created_at")
-    .eq("event_id", clean)
-    .order("created_at", { ascending: false });
+    .select("id, event_id, object_key, content_type, created_at, upload_origin")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (origin === "guest" || origin === "owner") {
+    query = query.eq("upload_origin", origin);
+  }
+
+  if (cursor) {
+    query = query.lt("created_at", cursor);
+  }
+
+  const { data: photos, error: photosError } = await query;
 
   if (photosError) {
     return NextResponse.json(
@@ -129,5 +83,24 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({ ok: true, photos: photos ?? [] });
+  const bucket = process.env.R2_BUCKET_NAME;
+  if (!bucket) {
+    return NextResponse.json({ ok: false, error: "Missing R2 bucket." }, { status: 500 });
+  }
+
+  const r2 = getR2Client();
+  const items = await Promise.all(
+    (photos ?? []).map(async (photo) => {
+      const viewUrl = await getSignedUrl(
+        r2,
+        new GetObjectCommand({ Bucket: bucket, Key: photo.object_key }),
+        { expiresIn: 3600 }
+      );
+      return { ...photo, url: viewUrl, downloadUrl: viewUrl };
+    })
+  );
+
+  const nextCursor = items.length > 0 ? items[items.length - 1].created_at : null;
+
+  return NextResponse.json({ ok: true, photos: items, nextCursor });
 }

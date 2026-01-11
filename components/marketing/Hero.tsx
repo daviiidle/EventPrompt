@@ -11,9 +11,6 @@ const Hero = () => {
       />
       <Container>
         <div className="flex flex-col items-center gap-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
-            {marketingCopy.brand.tagline}
-          </p>
           <h1 className="text-4xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl">
             {marketingCopy.hero.heading}
           </h1>

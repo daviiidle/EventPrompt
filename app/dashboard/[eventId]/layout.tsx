@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getServerUser } from "@/lib/serverAuth";
 import { getEventTitle } from "@/lib/eventUtils";
+import { refreshStripePaidStatus } from "@/lib/stripeStatus";
 
 type EventLayoutProps = {
   children: ReactNode;
@@ -35,20 +36,26 @@ export default async function EventLayout({ children, params }: EventLayoutProps
     redirect("/dashboard");
   }
 
+  const refreshed = await refreshStripePaidStatus(eventId, user.id);
+  const refreshedEvent = refreshed.event ? { ...event, ...refreshed.event } : event;
+
   const normalizedEmail = user.email?.trim().toLowerCase() ?? "";
-  if (event.owner_user_id !== user.id) {
-    if (!event.owner_user_id && event.owner_email?.toLowerCase() === normalizedEmail) {
+  if (refreshedEvent.owner_user_id !== user.id) {
+    if (
+      !refreshedEvent.owner_user_id &&
+      refreshedEvent.owner_email?.toLowerCase() === normalizedEmail
+    ) {
       await adminClient
         .from("events")
         .update({ owner_user_id: user.id })
-        .eq("id", event.id)
+        .eq("id", refreshedEvent.id)
         .is("owner_user_id", null);
     } else {
       redirect("/dashboard");
     }
   }
 
-  if (event.paid !== true) {
+  if (refreshedEvent.paid !== true) {
     return (
       <main className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-5 py-10 text-center text-gray-900 dark:text-white">
         <h1 className="text-2xl font-semibold">Payment required</h1>
@@ -65,7 +72,7 @@ export default async function EventLayout({ children, params }: EventLayoutProps
     );
   }
 
-  const title = getEventTitle(event);
+  const title = getEventTitle(refreshedEvent);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-gray-900 dark:bg-black dark:text-white">
@@ -86,9 +93,14 @@ export default async function EventLayout({ children, params }: EventLayoutProps
               <Link href={`/dashboard/${eventId}/rsvp`} className="text-neutral-700 hover:text-neutral-900 dark:text-neutral-300">
                 RSVP
               </Link>
-              <Link href={`/dashboard/${eventId}/seating`} className="text-neutral-700 hover:text-neutral-900 dark:text-neutral-300">
-                Seating
+              <Link href={`/dashboard/${eventId}/photos`} className="text-neutral-700 hover:text-neutral-900 dark:text-neutral-300">
+                Photos
               </Link>
+              {event.tier === "premium" ? (
+                <Link href={`/dashboard/${eventId}/seating`} className="text-neutral-700 hover:text-neutral-900 dark:text-neutral-300">
+                  Seating
+                </Link>
+              ) : null}
             </nav>
           </div>
         </aside>

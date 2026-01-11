@@ -22,6 +22,37 @@ export default async function SeatingPage({ params }: SeatingPageProps) {
   }
 
   const adminClient = createAdminClient();
+  const { data: event } = await adminClient
+    .from("events")
+    .select("id, tier")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!event) {
+    return (
+      <main className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        Missing event.
+      </main>
+    );
+  }
+
+  if (event.tier !== "premium") {
+    return (
+      <main className="rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <h1 className="text-2xl font-semibold">Seating is a Premium feature</h1>
+        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-300">
+          Upgrade to Premium to create seating plans and assign tables.
+        </p>
+        <a
+          href="/#pricing"
+          className="mt-6 inline-flex rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+        >
+          View Premium
+        </a>
+      </main>
+    );
+  }
+
   const { data: plans } = await adminClient
     .from("seating_plans")
     .select("id, object_key, content_type, created_at, is_active")

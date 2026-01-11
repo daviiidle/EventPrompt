@@ -160,7 +160,7 @@ const Pricing = () => {
             <div className="w-full max-w-sm">
               <label
                 htmlFor="pricing-email"
-                className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-emerald-200"
               >
                 Email for checkout
               </label>
@@ -170,7 +170,7 @@ const Pricing = () => {
                 value={ownerEmail}
                 onChange={(event) => setOwnerEmail(event.target.value)}
                 placeholder="you@example.com"
-                className="mt-2 w-full rounded-full border border-white/70 bg-white/80 px-4 py-2 text-sm text-gray-900 shadow-sm backdrop-blur focus:outline-none dark:border-gray-800 dark:bg-gray-900/70 dark:text-white"
+                className="mt-2 w-full rounded-full border border-white/80 bg-white/90 px-4 py-2 text-sm text-gray-900 shadow-lg shadow-emerald-500/10 backdrop-blur focus:outline-none focus:ring-2 focus:ring-emerald-400/40 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-white dark:placeholder:text-emerald-100/60"
               />
               <div className="mt-2 h-4" aria-hidden="true" />
             </div>
