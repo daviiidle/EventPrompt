@@ -32,38 +32,6 @@ const LoginPage = () => {
 
     setIsSending(true);
     try {
-      let gatePayload: { ok?: boolean; canLogin?: boolean; message?: string } | null =
-        null;
-      try {
-        const gateRes = await fetch("/api/auth/can-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim() }),
-        });
-
-        gatePayload = (await gateRes.json().catch(() => null)) as
-          | { ok?: boolean; canLogin?: boolean; message?: string }
-          | null;
-
-        if (!gateRes.ok || !gatePayload?.ok) {
-          setStatus(gatePayload?.message ?? "Unable to verify account status.");
-          return;
-        }
-      } catch {
-        setStatus(
-          "We couldn’t verify your account status. Please try again or complete checkout first."
-        );
-        return;
-      }
-
-      if (gatePayload?.canLogin === false) {
-        setStatus(
-          gatePayload.message ??
-            "This account does not have a paid event yet. Please complete checkout first."
-        );
-        return;
-      }
-
       const redirectTo = `${window.location.origin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),

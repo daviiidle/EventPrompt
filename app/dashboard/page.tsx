@@ -1,19 +1,12 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ensureActiveGuestToken } from "@/lib/guestTokens";
-import { formatEventDate, getEventTitle } from "@/lib/eventUtils";
 import { getServerUser } from "@/lib/serverAuth";
-import { getAppUrl } from "@/lib/appUrl";
-import GuestTokenPanel from "./GuestTokenPanel";
+import { getEventTitle } from "@/lib/eventUtils";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-type DashboardPageProps = {
-  searchParams?: Promise<{ event?: string }>;
-};
-
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage() {
   const user = await getServerUser();
   if (!user) {
     redirect("/login");
@@ -28,24 +21,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   if ((!events || events.length === 0) && user.email) {
     const normalizedEmail = user.email.trim().toLowerCase();
-    const { data: emailEvents, error: emailError } = await adminClient
+    const { data: emailEvents } = await adminClient
       .from("events")
-      .select("*")
+      .select("id, owner_user_id")
       .eq("owner_email", normalizedEmail)
-      .order("created_at", { ascending: false });
+      .is("owner_user_id", null);
 
-    if (!emailError && emailEvents && emailEvents.length > 0) {
-      events = emailEvents;
-      eventsError = null;
-
-      const unlinked = emailEvents.find((event) => !event.owner_user_id);
-      if (unlinked?.id) {
-        await adminClient
-          .from("events")
-          .update({ owner_user_id: user.id })
-          .eq("id", unlinked.id)
-          .is("owner_user_id", null);
-      }
+    if (emailEvents && emailEvents.length > 0) {
+      const ids = emailEvents.map((event) => event.id);
+      await adminClient.from("events").update({ owner_user_id: user.id }).in("id", ids);
+      const refreshed = await adminClient
+        .from("events")
+        .select("*")
+        .eq("owner_user_id", user.id)
+        .order("created_at", { ascending: false });
+      events = refreshed.data ?? [];
+      eventsError = refreshed.error ?? null;
     }
   }
 
@@ -58,88 +49,45 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
   }
 
-  if (!events || events.length === 0) {
+  const paidEvents = (events ?? []).filter((event) => event.paid === true);
+
+  if (!paidEvents || paidEvents.length === 0) {
     return (
-      <main className="mx-auto max-w-3xl px-5 py-10">
-        <h1 className="text-2xl font-semibold text-neutral-900">Dashboard</h1>
-        <p className="mt-4 text-sm text-neutral-600">No events found for this account.</p>
+      <main className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-5 py-10 text-center text-gray-900 dark:text-white">
+        <h1 className="text-2xl font-semibold">Payment required</h1>
+        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-300">
+          Complete checkout to unlock your dashboard.
+        </p>
+        <Link
+          href="/#pricing"
+          className="mt-6 inline-flex rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+        >
+          Start checkout
+        </Link>
       </main>
     );
   }
 
-  const resolvedSearchParams = await searchParams;
-  const requestedEventId = resolvedSearchParams?.event ?? "";
-  const activeEvent =
-    events.find((event) => event.id === requestedEventId) ?? events[0];
-
-  let tokenRow: Awaited<ReturnType<typeof ensureActiveGuestToken>> | null = null;
-  let tokenError: string | null = null;
-  try {
-    tokenRow = await ensureActiveGuestToken(activeEvent.id as string);
-  } catch (error) {
-    tokenError =
-      error instanceof Error
-        ? error.message
-        : "Failed to load guest upload link.";
+  if (paidEvents.length === 1) {
+    redirect(`/dashboard/${paidEvents[0].id}`);
   }
-  const title = getEventTitle(activeEvent);
-  const eventDate = formatEventDate(activeEvent);
-  const paidLabel = activeEvent.paid === true ? "Paid" : "Unpaid";
-  const appUrl = await getAppUrl();
 
   return (
-    <main className="mx-auto max-w-4xl px-5 py-10 text-gray-900 dark:text-white">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
-          Owner Dashboard
-        </p>
-        <h1 className="text-3xl font-semibold text-neutral-900 dark:text-white">{title}</h1>
-        <div className="flex flex-wrap gap-3 text-sm text-neutral-700 dark:text-neutral-300">
-          <span>{paidLabel}</span>
-          {eventDate ? <span>{eventDate}</span> : null}
-          {activeEvent.tier ? <span>Tier: {String(activeEvent.tier)}</span> : null}
-        </div>
-      </header>
-
-      {events.length > 1 ? (
-        <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Your events</h2>
-          <ul className="mt-3 flex flex-col gap-2">
-            {events.map((event) => {
-              const label = getEventTitle(event);
-              const isActive = event.id === activeEvent.id;
-              return (
-                <li key={event.id}>
-                  <Link
-                    href={`/dashboard?event=${event.id}`}
-                    className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-                      isActive
-                        ? "border-neutral-900 text-neutral-900 dark:border-white dark:text-white"
-                        : "border-neutral-200 text-neutral-600 hover:border-neutral-400 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-500"
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {isActive ? <span className="text-xs">Selected</span> : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
-      {tokenRow ? (
-        <GuestTokenPanel
-          eventId={activeEvent.id as string}
-          baseUrl={appUrl}
-          initialToken={tokenRow.token}
-          initialExpiresAt={tokenRow.expires_at}
-        />
-      ) : (
-        <section className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">
-          {tokenError ?? "Unable to load guest upload link."}
-        </section>
-      )}
+    <main className="mx-auto max-w-3xl px-5 py-10 text-gray-900 dark:text-white">
+      <h1 className="text-2xl font-semibold">Select an event</h1>
+      <ul className="mt-6 flex flex-col gap-3">
+        {paidEvents.map((event) => (
+          <li key={event.id}>
+            <Link
+              href={`/dashboard/${event.id}`}
+              className="flex items-center justify-between rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm shadow-sm hover:border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900"
+            >
+              <span>{getEventTitle(event)}</span>
+              <span className="text-xs text-neutral-500">Open</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }

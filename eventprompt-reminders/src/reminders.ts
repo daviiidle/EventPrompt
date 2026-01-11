@@ -13,6 +13,7 @@ interface Household {
   id: number | string;
   household_name?: string | null;
   phone_e164?: string | null;
+  email?: string | null;
   sms_opt_out?: boolean | null;
   rsvp_attending?: boolean | null;
   events?: Event | null;
@@ -20,6 +21,7 @@ interface Household {
 
 interface Event {
   event_date?: string | null;
+  tier?: string | null;
 }
 
 export async function fetchDueReminders(
@@ -50,13 +52,11 @@ export async function fetchDueReminders(
     const h = r.households;
     if (!h) return false;
 
-    if (h.sms_opt_out === true) return false;
-
     if (requireUnresponded && h.rsvp_attending !== null && h.rsvp_attending !== undefined) {
       return false;
     }
 
-    if (!h.phone_e164) return false;
+    if (!h.phone_e164 && !h.email) return false;
 
     return true;
   });
@@ -145,6 +145,58 @@ export async function logSmsBackwardCompatible(
   );
 }
 
+export async function logEmailMessage(
+  env: Env,
+  payload: {
+    household_id: number | string;
+    reminder_step?: number;
+    to_email: string;
+    subject: string;
+    body: string;
+    status: string;
+    provider_message_id?: string | null;
+    error_code?: string | null;
+    error_message?: string | null;
+  }
+): Promise<void> {
+  const res = await supabaseFetch(env, "email_messages", {
+    method: "POST",
+    body: JSON.stringify({
+      household_id: payload.household_id,
+      reminder_step: payload.reminder_step,
+      to_email: payload.to_email,
+      subject: payload.subject,
+      body: payload.body,
+      status: payload.status,
+      provider_message_id: payload.provider_message_id ?? null,
+      error_code: payload.error_code ?? null,
+      error_message: payload.error_message ?? null,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`email_messages insert failed: ${await res.text()}`);
+  }
+}
+
+export async function emailMessageExists(
+  env: Env,
+  householdId: number | string,
+  reminderStep: number
+): Promise<boolean> {
+  const res = await supabaseFetch(
+    env,
+    `email_messages?household_id=eq.${householdId}&reminder_step=eq.${reminderStep}&select=id&limit=1`
+  );
+
+  if (!res.ok) {
+    throw new Error(`email_messages lookup failed: ${await res.text()}`);
+  }
+
+  const rows = (await res.json()) as Array<{ id?: string }>;
+  return rows.length > 0;
+}
+
 export async function processDueReminders(
   env: Env,
   limit = 3
@@ -158,8 +210,52 @@ export async function processDueReminders(
     error?: string;
   }> = [];
 
+  const claimReminder = async (reminderId: number | string) => {
+    const res = await supabaseFetch(env, `reminder_state?id=eq.${reminderId}&status=eq.active`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "processing" }),
+    });
+    if (!res.ok) return false;
+    const rows = (await res.json()) as Array<{ id?: string }>;
+    return rows.length > 0;
+  };
+
+  const markActive = async (reminderId: number | string) => {
+    await supabaseFetch(env, `reminder_state?id=eq.${reminderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "active" }),
+    });
+  };
+
+  const markCompleted = async (reminderId: number | string) => {
+    await supabaseFetch(env, `reminder_state?id=eq.${reminderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "completed",
+        next_reminder_at: null,
+      }),
+    });
+  };
+
+  const advanceReminder = async (reminderId: number | string, next: number, nextAt: string) => {
+    await supabaseFetch(env, `reminder_state?id=eq.${reminderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "active",
+        reminder_step: next,
+        next_reminder_at: nextAt,
+      }),
+    });
+  };
+
   for (const r of reminders) {
     const reminderId = r.id;
+
+    const claimed = await claimReminder(reminderId);
+    if (!claimed) {
+      results.push({ reminder_id: reminderId, sent: false });
+      continue;
+    }
 
     try {
       const household = r.households;
@@ -169,13 +265,58 @@ export async function processDueReminders(
         throw new Error("Missing households/events join data");
       }
 
-      const to = resolveSendTo(env, household.phone_e164);
+      const isPremium = String(event.tier || "").toLowerCase() === "premium";
       const message = buildMessage({
         household,
         event,
         reminderStep: r.reminder_step,
       });
 
+      const canEmail = !!household.email;
+      const canSms =
+        isPremium && !!household.phone_e164 && household.sms_opt_out !== true;
+
+      if (canEmail) {
+        const alreadyQueued = await emailMessageExists(
+          env,
+          household.id,
+          r.reminder_step
+        );
+        if (!alreadyQueued) {
+          await logEmailMessage(env, {
+            household_id: household.id,
+            reminder_step: r.reminder_step,
+            to_email: household.email,
+            subject: "Event reminder",
+            body: message,
+            status: "queued",
+          });
+        }
+      }
+
+      if (!canSms) {
+        if (!canEmail) {
+          await markCompleted(reminderId);
+          results.push({ reminder_id: reminderId, sent: false });
+          continue;
+        }
+
+        const next = nextStep(r.reminder_step);
+        if (next) {
+          const eventDate = event.event_date;
+          if (!eventDate) throw new Error("Missing event_date");
+
+          const nextAt = computeNextReminderAtUtcISO(eventDate, next);
+          await advanceReminder(reminderId, next, nextAt);
+        } else {
+          await markCompleted(reminderId);
+        }
+
+        results.push({ reminder_id: reminderId, sent: true });
+        continue;
+      }
+
+      const to = resolveSendTo(env, household.phone_e164);
       const sms = await sendSms(env, to, message);
 
       await logSmsBackwardCompatible(env, {
@@ -196,21 +337,9 @@ export async function processDueReminders(
         const daysBefore = next;
         const nextAt = computeNextReminderAtUtcISO(eventDate, daysBefore);
 
-        await supabaseFetch(env, `reminder_state?id=eq.${reminderId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            reminder_step: next,
-            next_reminder_at: nextAt,
-          }),
-        });
+        await advanceReminder(reminderId, next, nextAt);
       } else {
-        await supabaseFetch(env, `reminder_state?id=eq.${reminderId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            status: "completed",
-            next_reminder_at: null,
-          }),
-        });
+        await markCompleted(reminderId);
       }
 
       results.push({ reminder_id: reminderId, sent: true });
@@ -241,6 +370,7 @@ export async function processDueReminders(
         sent: false,
         error: String((err as Error)?.message || err),
       });
+      await markActive(reminderId);
     }
   }
 

@@ -41,6 +41,13 @@ export function buildGuestObjectKey(eventId: string, tokenPrefix: string, filena
   return `events/${eventId}/guest/${datePath}/${tokenPrefix}/${randomSuffix}/${safeName}`;
 }
 
+export function buildSeatingPlanObjectKey(eventId: string, filename: string) {
+  const timestamp = formatTimestamp(new Date());
+  const randomSuffix = randomBytes(3).toString("hex");
+  const safeName = sanitizeFilename(filename);
+  return `events/${eventId}/seating-plans/${timestamp}-${randomSuffix}-${safeName}`;
+}
+
 export async function createSignedUploadUrl({
   objectKey,
   contentType,
