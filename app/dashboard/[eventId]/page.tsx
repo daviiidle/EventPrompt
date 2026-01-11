@@ -98,6 +98,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
           baseUrl={appUrl}
           initialToken={tokenRow.token}
           initialExpiresAt={tokenRow.expires_at}
+          eventName={rawEventName || title}
         />
       ) : (
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900">

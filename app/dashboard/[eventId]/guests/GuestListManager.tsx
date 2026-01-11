@@ -163,8 +163,8 @@ export default function GuestListManager({
               onClick={() => setImportSource(source)}
               className={`rounded-full px-4 py-2 text-xs font-semibold ${
                 importSource === source
-                  ? "bg-neutral-900 text-white"
-                  : "bg-neutral-100 text-neutral-700"
+                  ? "bg-white text-neutral-900"
+                  : "bg-neutral-900 text-white"
               }`}
             >
               {source === "paste" ? "Paste list" : "CSV upload"}

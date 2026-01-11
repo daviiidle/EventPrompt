@@ -1,11 +1,13 @@
-import GuestUploadForm from "./GuestUploadForm";
+import GuestUploadForm from "../GuestUploadForm";
 import { formatEventDate, getEventTitle } from "@/lib/eventUtils";
 import { getTokenInfoByToken, isTokenExpired } from "@/lib/guestTokens";
+import { redirect } from "next/navigation";
+import { slugify } from "@/lib/slugify";
 
 export const dynamic = "force-dynamic";
 
 type GuestUploadPageProps = {
-  params: Promise<{ token: string }>;
+  params: Promise<{ token: string; slug?: string[] }>;
 };
 
 export default async function GuestUploadPage({ params }: GuestUploadPageProps) {
@@ -18,6 +20,7 @@ export default async function GuestUploadPage({ params }: GuestUploadPageProps) 
   }
 
   const token = rawToken.trim();
+  const rawSlug = resolvedParams.slug?.[0] ?? "";
 
   if (!token) {
     return (
@@ -52,10 +55,17 @@ export default async function GuestUploadPage({ params }: GuestUploadPageProps) 
     errorBody = "This link is invalid. Ask your host for a fresh link.";
   } else if (event.paid !== true) {
     errorTitle = "Uploads locked";
-    errorBody = "This event has not been paid for yet, so guest uploads are locked. Ask your host to complete checkout.";
+    errorBody =
+      "This event has not been paid for yet, so guest uploads are locked. Ask your host to complete checkout.";
   }
 
-  if (!tokenInfo || tokenInfo.status !== "active" || isTokenExpired(tokenInfo) || !event || event.paid !== true) {
+  if (
+    !tokenInfo ||
+    tokenInfo.status !== "active" ||
+    isTokenExpired(tokenInfo) ||
+    !event ||
+    event.paid !== true
+  ) {
     return (
       <main className="mx-auto flex min-h-screen max-w-lg flex-col px-5 py-10 text-center text-neutral-900 dark:text-white">
         <h1 className="text-2xl font-semibold">{errorTitle}</h1>
@@ -66,6 +76,17 @@ export default async function GuestUploadPage({ params }: GuestUploadPageProps) 
 
   const title = getEventTitle(event);
   const eventDate = formatEventDate(event);
+  const slugSource =
+    event.event_name ?? event.title ?? event.name ?? event.event_title ?? "event";
+  const correctSlug = slugify(String(slugSource), "event");
+
+  if (!rawSlug) {
+    redirect(`/u/${encodeURIComponent(token)}/${correctSlug}`);
+  }
+
+  if (rawSlug && rawSlug !== correctSlug) {
+    redirect(`/u/${encodeURIComponent(token)}/${correctSlug}`);
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col px-5 py-10 text-neutral-900 dark:text-white">

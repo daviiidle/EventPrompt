@@ -310,8 +310,8 @@ export default function PhotosGallery({
               }}
               className={`rounded-full px-4 py-2 text-xs font-semibold ${
                 origin === item.value
-                  ? "bg-neutral-900 text-white"
-                  : "bg-neutral-100 text-neutral-700"
+                  ? "bg-white text-neutral-900"
+                  : "bg-neutral-900 text-white"
               }`}
             >
               {item.label}

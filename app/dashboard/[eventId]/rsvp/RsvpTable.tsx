@@ -64,8 +64,8 @@ export default function RsvpTable({ households, reminderState }: RsvpTableProps)
               onClick={() => setFilter(item)}
               className={`rounded-full px-4 py-2 text-xs font-semibold ${
                 filter === item
-                  ? "bg-neutral-900 text-white"
-                  : "bg-neutral-100 text-neutral-700"
+                  ? "bg-white text-neutral-900"
+                  : "bg-neutral-900 text-white"
               }`}
             >
               {item === "all"

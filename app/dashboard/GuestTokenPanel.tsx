@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import QRCode from "qrcode";
+import { slugify } from "@/lib/slugify";
 
 type GuestTokenPanelProps = {
   eventId: string;
   baseUrl: string;
   initialToken: string;
   initialExpiresAt?: string | null;
+  eventName?: string | null;
 };
 
 export default function GuestTokenPanel({
@@ -16,6 +18,7 @@ export default function GuestTokenPanel({
   baseUrl,
   initialToken,
   initialExpiresAt,
+  eventName,
 }: GuestTokenPanelProps) {
   const resolvedBaseUrl = useMemo(() => {
     if (baseUrl) return baseUrl;
@@ -26,20 +29,22 @@ export default function GuestTokenPanel({
   const [token, setToken] = useState(initialToken);
   const [expiresAt, setExpiresAt] = useState(initialExpiresAt ?? null);
   const [guestLink, setGuestLink] = useState(() => {
+    const slug = slugify(eventName, "event");
     if (!resolvedBaseUrl) return `/u/${initialToken}`;
-    return `${resolvedBaseUrl}/u/${initialToken}`;
+    return `${resolvedBaseUrl}/u/${initialToken}/${slug}`;
   });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isRotating, setIsRotating] = useState(false);
 
   useEffect(() => {
+    const slug = slugify(eventName, "event");
     if (!resolvedBaseUrl) {
-      setGuestLink(`/u/${token}`);
+      setGuestLink(`/u/${token}/${slug}`);
     } else {
-      setGuestLink(`${resolvedBaseUrl}/u/${token}`);
+      setGuestLink(`${resolvedBaseUrl}/u/${token}/${slug}`);
     }
-  }, [resolvedBaseUrl, token]);
+  }, [resolvedBaseUrl, token, eventName]);
 
   useEffect(() => {
     let isMounted = true;
